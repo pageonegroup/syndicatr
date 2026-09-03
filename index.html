@@ -2508,6 +2508,10 @@ function markAllNotifsRead() {
   showToast('All notifications marked as read.','green');
 }
 function pushNotif(userId, title, body, type, contentId=null) {
+  // Don't stack an identical notification the client hasn't read yet —
+  // toggling a control back and forth should not produce a pile of duplicates.
+  const dupe=(DB.notifications||[]).some(n=>n&&!n.read&&n.userId===userId&&n.title===title&&n.contentId===contentId);
+  if(dupe) return;
   DB.notifications.push({id:'nt'+uid(),userId,title,body,time:today(),read:false,type,contentId});
   if(currentUser&&currentUser.id===userId){
     const prefix=currentUser.role==='client'?'cl':currentUser.role==='publisher'?'pub':'adm';
@@ -5237,7 +5241,10 @@ function toggleReportVisibility(id) {
     if(gaps.length){ showIncompleteReport(c, gaps); return; }
   }
   c.reportVisible=!c.reportVisible;
-  if(c.reportVisible){
+  // Announce the first reveal only. Hiding and re-showing while correcting
+  // rows should not notify the client again.
+  if(c.reportVisible && !c.reportNotified){
+    c.reportNotified=true;
     pushNotif(c.clientId,'Report Available',`Syndication details for "${c.title}" are now viewable.`,'content',c.id);
   }
   const mode=currentUser.role==='publisher'?'pub':'adm';
