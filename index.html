@@ -5266,7 +5266,7 @@ function toggleReportVisibility(id) {
     // agree. Confirm the implied status change rather than doing it silently.
     if(c.status!=='published'){
       showConfirm('Publish this content?',
-        `Showing the report tells ${getUser(c.clientId)?.company||'the client'} that "${c.title}" is live, so its status must be Published. It is currently ${String(c.status).toUpperCase()}. Continue and set it to Published?`,
+        `Showing the report tells ${getUser(c.clientId)?.company||'the client'} that "${c.title}" is live, so its status must be changed to PUBLISHED. It is currently ${String(c.status).toUpperCase()}. Continue and set it to PUBLISHED?`,
         ()=>{ applyReportVisible(id, true); },
         'Yes, Publish and Show', 'primary');
       return;
