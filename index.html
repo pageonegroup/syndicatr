@@ -1087,7 +1087,7 @@ input[type="date"].input{cursor:pointer;}
               <button class="btn btn-primary btn-sm" onclick="openAddUser('publisher')">+ Add Publisher</button>
               <span class="results-count" id="adm-publishers-count"></span>
             </div>
-            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th class="td-num">Publications</th><th>Password</th><th>Status</th><th style="text-align:center;width:120px;padding-right:14px;">Action</th></tr></thead><tbody id="adm-publishers-tbody"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Password</th><th>Status</th><th style="text-align:center;width:120px;padding-right:14px;">Action</th></tr></thead><tbody id="adm-publishers-tbody"></tbody></table></div>
           </div>
         </div>
         <!-- ADMINS (superadmin only) -->
@@ -1749,7 +1749,7 @@ input[type="date"].input{cursor:pointer;}
 // ===============================================
 const DB = {
   users: [
-    {id:'u0',name:'Super Admin',email:'superadmin@syn.com',password:'admin',role:'superadmin',status:'active',company:'Syndicatr HQ',contactPerson:'',mobile:'',secCert:'',credits:0,createdAt:'2025-01-01'},
+    {id:'u0',name:'Super Admin',email:'subscriptions@pageone.ph',password:'3V@NGELIST++1977',role:'superadmin',status:'active',company:'Syndicatr HQ',contactPerson:'',mobile:'',secCert:'',credits:0,createdAt:'2025-01-01'},
     {id:'u1',name:'John Reyes',email:'admin@syn.com',password:'admin',role:'admin',status:'active',company:'Syndicatr',contactPerson:'',mobile:'+63 917 800 0001',secCert:'',credits:0,createdAt:'2025-01-05'},
     {id:'u2',name:'Marco Santos',email:'pub1@syn.com',password:'admin',role:'publisher',status:'active',company:'',contactPerson:'',mobile:'+63 917 222 3333',secCert:'',credits:0,createdAt:'2025-01-15'},
     {id:'u3',name:'Luisa Tan',email:'pub2@syn.com',password:'admin',role:'publisher',status:'active',company:'',contactPerson:'',mobile:'+63 918 444 5555',secCert:'',credits:0,createdAt:'2025-02-01'},
@@ -2451,7 +2451,8 @@ function renderQuickLogin() {
   const roleColors={superadmin:'var(--accent)',admin:'var(--orange)',publisher:'var(--purple)',client:'var(--blue)',mediameter:'var(--teal)'};
   const roleIcons={superadmin:'🛡',admin:'⚙️',publisher:'✍️',client:'🏢',mediameter:'📊'};
   const grouped={superadmin:[],admin:[],publisher:[],client:[],mediameter:[]};
-  DB.users.forEach(u=>{ if(grouped[u.role]) grouped[u.role].push(u); });
+  // the super admin is a real account — keep it off the one-click demo panel
+  DB.users.forEach(u=>{ if(u.role!=='superadmin' && grouped[u.role]) grouped[u.role].push(u); });
   const order=['superadmin','admin','publisher','client','mediameter'];
   let html='';
   order.forEach(role=>{
@@ -3174,11 +3175,10 @@ function renderPublishers(q='') {
   tbody.innerHTML=list.map(u=>`<tr>
     <td class="td-name">${uCell(u,'name',u.name)}</td>
     <td class="td-mono">${uCell(u,'email',u.email)}</td>
-    <td class="td-num">${DB.publications.length}</td>
     <td>${uPwCell(u)}</td>
     <td>${uStatusCell(u)}</td>
     <td style="text-align:center;padding-right:14px;">${uActions(u)}</td>
-  </tr>`).join('') || `<tr><td colspan="6" class="empty"><div class="empty-icon">✍️</div><div class="empty-text">No publishers</div></td></tr>`;
+  </tr>`).join('') || `<tr><td colspan="5" class="empty"><div class="empty-icon">✍️</div><div class="empty-text">No publishers</div></td></tr>`;
   setText('adm-publishers-count',`${list.length} publisher${list.length!==1?'s':''}`);
 }
 
