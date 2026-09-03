@@ -1959,6 +1959,44 @@ const DB = {
 // This mirrors DB into localStorage so work survives refreshes until the
 // Supabase backend lands. Remove this block once the real backend is wired.
 const DB_STORE_KEY = 'syndicatr_db_v1';
+const SESSION_KEY  = 'syndicatr_session_v1';
+function saveSession(userId){ try{ localStorage.setItem(SESSION_KEY, userId); }catch(e){} }
+function clearSession(){ try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
+// Re-open the same screen and view after a reload, driven by the URL hash.
+function restoreSession() {
+  let uid=null;
+  try{ uid=localStorage.getItem(SESSION_KEY); }catch(e){}
+  if(!uid) return false;
+  const user=(DB.users||[]).find(u=>u&&u.id===uid&&u.status==='active');
+  if(!user){ clearSession(); return false; }
+  currentUser=user;
+  ['screen-landing','screen-login','screen-client','screen-publisher','screen-admin','screen-mediameter']
+    .forEach(id=>document.getElementById(id)?.classList.remove('active'));
+  _navSuppress=true;                       // loaders call their own *Show()
+  try{
+    if(user.role==='client') loadClientScreen();
+    else if(user.role==='publisher') loadPublisherScreen();
+    else if(user.role==='mediameter') loadMediaMeterScreen();
+    else loadAdminScreen();
+    // hash looks like #publisher/publications — reopen that view if it is valid
+    const parts=decodeURIComponent(location.hash||'').replace(/^#/,'').split('/');
+    const screen=parts[0], view=parts[1];
+    const expected={client:'client',publisher:'publisher',admin:'admin',superadmin:'admin',mediameter:'mediameter'}[user.role];
+    if(view && screen===expected){
+      const fn=NAV_SHOW[user.role];
+      const prefix={client:'cl',publisher:'pub',admin:'adm',superadmin:'adm',mediameter:'mm'}[user.role];
+      // only restore a view that actually exists for this role
+      if(typeof window[fn]==='function' && document.getElementById(prefix+'-view-'+view)){
+        window[fn](view, document.getElementById(prefix+'-nav-'+view)?.textContent.trim() || '');
+      }
+    }
+  } catch(e){ console.error('restoreSession', e); }
+  finally{ _navSuppress=false; }
+  // replace the history entry so Back does not return to a stale landing entry
+  navPush(({client:'client',publisher:'publisher',admin:'admin',superadmin:'admin',mediameter:'mediameter'})[user.role],
+          (location.hash.split('/')[1]||null), '', true);
+  return true;
+}
 let _dbDirty = false;
 function persistDB() {
   try {
@@ -2446,6 +2484,7 @@ function quickLogin(userId) {
   if(!user){showToast('User not found.','red');return;}
   if(user.status!=='active'){showToast('This account is inactive.','red');return;}
   currentUser=user;
+  saveSession(user.id);
   DB.loginLog.push({userId:user.id,date:today()});
   // clear every screen, not just login — history restore depends on exact state
   ['screen-landing','screen-login','screen-client','screen-publisher','screen-admin','screen-mediameter']
@@ -2548,6 +2587,7 @@ function doLogin() {
   const user=DB.users.find(u=>u.email===email&&u.password===pass&&u.status==='active');
   if(!user){errEl.textContent='Invalid email or password.';errEl.style.display='block';return;}
   currentUser=user;
+  saveSession(user.id);
   DB.loginLog.push({userId:user.id,date:today()});
   ['screen-landing','screen-login','screen-client','screen-publisher','screen-admin','screen-mediameter']
     .forEach(id=>document.getElementById(id)?.classList.remove('active'));
@@ -2605,6 +2645,8 @@ document.addEventListener('wheel', function(e){
 }, { passive:false });
 
 function doLogout() {
+  persistDB();
+  clearSession();
   currentUser=null;
   _navSuppress=true;   // goToLanding pushes its own entry below
   ['screen-client','screen-publisher','screen-admin','screen-mediameter'].forEach(s=>{
@@ -6812,8 +6854,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if(c&&c.reportVisible===undefined) c.reportVisible=(c.status==='published');
     if(c&&c.restrictionCheck===undefined) c.restrictionCheck={status:'passed',blocks:[],advisories:[],at:c.postedAt||c.createdAt};
   });
-  navPush('landing', null, '', true);   // baseline entry for the Back button
   renderQuickLogin();
+  // A refresh should land back where the user was, not on the marketing page
+  if(!restoreSession()) navPush('landing', null, '', true);
   initDropZones();
   renderDriveStatus();
   // Landing page scroll-reveal (scoped to the landing screen element)
