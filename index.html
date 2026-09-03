@@ -2477,6 +2477,26 @@ function closeNotifPanel() {
   document.getElementById('notif-panel').classList.remove('open');
   document.getElementById('notif-overlay').classList.remove('open');
 }
+// "14 minutes ago" for anything recent, an absolute stamp beyond that
+function notifTimeLabel(stamp) {
+  const str=String(stamp||'');
+  if(!str) return '';
+  const [d,t]=str.split(' ');
+  if(!t) return fmtDate(d);                       // legacy date-only entries
+  const p=d.split('-'), hm=t.split(':');
+  const then=new Date(+p[0],+p[1]-1,+p[2],+hm[0],+hm[1]);
+  const nowP=phParts(); const np=nowP.date.split('-'), nh=nowP.time.split(':');
+  const now=new Date(+np[0],+np[1]-1,+np[2],+nh[0],+nh[1]);
+  const mins=Math.floor((now-then)/60000);
+  if(mins<1)  return 'Just now';
+  if(mins<60) return `${mins} minute${mins!==1?'s':''} ago`;
+  const hrs=Math.floor(mins/60);
+  if(hrs<24)  return `${hrs} hour${hrs!==1?'s':''} ago`;
+  const days=Math.floor(hrs/24);
+  if(days===1) return `Yesterday · ${t}`;
+  if(days<7)   return `${days} days ago · ${t}`;
+  return `${p[1]}/${p[2]}/${p[0]} · ${t}`;
+}
 function renderNotifList() {
   const uid=currentUser?.id;
   const list=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time));
@@ -2488,7 +2508,7 @@ function renderNotifList() {
       <div class="notif-item-icon">${icons[n.type]||'🔔'}</div>
       <div class="notif-item-title">${n.title}</div>
       <div class="notif-item-body">${n.body}</div>
-      <div class="notif-item-time">${fmtDate(n.time)}</div>
+      <div class="notif-item-time" title="${fmtDateTimePlain(n.time)} PH">${notifTimeLabel(n.time)}</div>
     </div>`).join('');
 }
 function clickNotif(id) {
@@ -2512,7 +2532,7 @@ function pushNotif(userId, title, body, type, contentId=null) {
   // toggling a control back and forth should not produce a pile of duplicates.
   const dupe=(DB.notifications||[]).some(n=>n&&!n.read&&n.userId===userId&&n.title===title&&n.contentId===contentId);
   if(dupe) return;
-  DB.notifications.push({id:'nt'+uid(),userId,title,body,time:today(),read:false,type,contentId});
+  DB.notifications.push({id:'nt'+uid(),userId,title,body,time:phStamp(),read:false,type,contentId});
   if(currentUser&&currentUser.id===userId){
     const prefix=currentUser.role==='client'?'cl':currentUser.role==='publisher'?'pub':'adm';
     updateNotifBadge(prefix);
@@ -4142,11 +4162,14 @@ function updateWizardUI() {
   }
 }
 let _confirmCallback = null;
-function showConfirm(title, msg, onOk, okLabel) {
+function showConfirm(title, msg, onOk, okLabel, variant) {
   _confirmCallback = onOk;
   document.getElementById('confirm-title').textContent = title;
   document.getElementById('confirm-msg').textContent = msg;
-  document.getElementById('confirm-ok-btn').textContent = okLabel || 'Yes, Remove';
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.textContent = okLabel || 'Yes, Remove';
+  // destructive by default; pass 'primary' for a non-destructive confirmation
+  btn.className = 'btn ' + (variant === 'primary' ? 'btn-primary' : 'btn-danger');
   openModal('modal-confirm');
 }
 function confirmOk() {
@@ -5239,8 +5262,27 @@ function toggleReportVisibility(id) {
   if(!c.reportVisible){
     const gaps=reportGaps(c);
     if(gaps.length){ showIncompleteReport(c, gaps); return; }
+    // A visible report tells the client the work is live, so the status has to
+    // agree. Confirm the implied status change rather than doing it silently.
+    if(c.status!=='published'){
+      showConfirm('Publish this content?',
+        `Showing the report tells ${getUser(c.clientId)?.company||'the client'} that "${c.title}" is live, so its status must be Published. It is currently ${String(c.status).toUpperCase()}. Continue and set it to Published?`,
+        ()=>{ applyReportVisible(id, true); },
+        'Yes, Publish and Show', 'primary');
+      return;
+    }
   }
-  c.reportVisible=!c.reportVisible;
+  applyReportVisible(id, !c.reportVisible);
+}
+// Applies the change once any confirmation has been cleared
+function applyReportVisible(id, makeVisible) {
+  const c=(DB.content||[]).find(x=>x&&x.id===id); if(!c) return;
+  if(makeVisible && c.status!=='published'){
+    const prev=c.status;
+    c.status='published';
+    notifyStatusChange(c, prev, 'published');
+  }
+  c.reportVisible=makeVisible;
   // Announce the first reveal only. Hiding and re-showing while correcting
   // rows should not notify the client again.
   if(c.reportVisible && !c.reportNotified){
@@ -5249,6 +5291,7 @@ function toggleReportVisibility(id) {
   }
   const mode=currentUser.role==='publisher'?'pub':'adm';
   renderContentTable(mode, getVal(mode+'-content-search')||'');
+  if(currentUser.role==='admin'||currentUser.role==='superadmin') renderAdminKPIs();
   persistDB();
   showToast(c.reportVisible?'Report is now visible to the client.':'Report hidden from the client.', c.reportVisible?'green':'orange');
 }
